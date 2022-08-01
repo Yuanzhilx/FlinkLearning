@@ -1,3 +1,0 @@
-aaa_bbb_ccc
-ccc_ddd_eee
-aaa_ccc_fff
