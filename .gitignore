@@ -6,6 +6,9 @@ src/test/
 # Log file
 *.log
 
+# Data file
+data/
+
 # IDEA file
 .idea/
 *.iml
