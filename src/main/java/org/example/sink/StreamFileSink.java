@@ -38,7 +38,7 @@ public class StreamFileSink {
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(2000, CheckpointingMode.EXACTLY_ONCE);
-        env.getCheckpointConfig().setCheckpointStorage("data/ckp/StreamFileSink");
+        env.getCheckpointConfig().setCheckpointStorage("file:///d:/ckpt");
         env.setParallelism(2);
         DataStreamSource<EventLog> streamSource = env.addSource(new MyRichSourceFunc());
         SingleOutputStreamOperator<String> jsonStream = streamSource.map(new RichMapFunction<EventLog, String>() {
@@ -66,22 +66,28 @@ public class StreamFileSink {
 
         //2.需要写avsc文件，https://avro.apache.org/docs/1.11.0/gettingstartedjava.html
         //插件编译的时候就可以自动执行，生成对应bean文件
-        ParquetWriterFactory<AvroEventLogBean> writerFactory = ParquetAvroWriters.forSpecificRecord(AvroEventLogBean.class);//根据模式生成Writer
-        FileSink<AvroEventLogBean> parquetSink = FileSink.forBulkFormat(new Path("data/sink/output/streamFileSink"), writerFactory)
-                .withBucketAssigner(new DateTimeBucketAssigner<AvroEventLogBean>())
+//        ParquetWriterFactory<AvroEventLogBean> writerFactory = ParquetAvroWriters.forSpecificRecord(AvroEventLogBean.class);//根据模式生成Writer
+//        FileSink<AvroEventLogBean> parquetSink = FileSink.forBulkFormat(new Path("data/sink/output/streamFileSink"), writerFactory)
+//                .withBucketAssigner(new DateTimeBucketAssigner<AvroEventLogBean>())
+//                .withBucketCheckInterval(5)
+//                .withRollingPolicy(OnCheckpointRollingPolicy.build())//Bulk模式下滚动条件只有一种，当发生CheckPoint的时候才会滚动文件
+//                .withOutputFileConfig(OutputFileConfig.builder().withPartPrefix("zhibai").withPartSuffix(".parquet").build()).build();
+//
+//        streamSource.map(eventLogBean -> {
+//                    HashMap<CharSequence,CharSequence> eventInfo = new HashMap<>();
+//                    for (Map.Entry<String, String> entry : eventLogBean.getEventInfo().entrySet()) {
+//                        eventInfo.put(entry.getKey(),entry.getValue());
+//                    }
+//                    return new AvroEventLogBean(eventLogBean.getGuid(),eventLogBean.getSessionId(),eventLogBean.getEventId(),eventLogBean.getTimeStamp(),eventInfo);
+//                }).returns(AvroEventLogBean.class).sinkTo(parquetSink);
+
+        //3.利用Avro规范Bean对象，来生成ParquetAvroWriter工厂
+        FileSink<EventLog> parquetSink = FileSink.forBulkFormat(new Path("data/sink/output/streamFileSink"), ParquetAvroWriters.forReflectRecord(EventLog.class))
+                .withBucketAssigner(new DateTimeBucketAssigner<EventLog>())
                 .withBucketCheckInterval(5)
                 .withRollingPolicy(OnCheckpointRollingPolicy.build())//Bulk模式下滚动条件只有一种，当发生CheckPoint的时候才会滚动文件
                 .withOutputFileConfig(OutputFileConfig.builder().withPartPrefix("zhibai").withPartSuffix(".parquet").build()).build();
-
-        streamSource.map(eventLogBean -> {
-                    HashMap<CharSequence,CharSequence> eventInfo = new HashMap<>();
-                    for (Map.Entry<String, String> entry : eventLogBean.getEventInfo().entrySet()) {
-                        eventInfo.put(entry.getKey(),entry.getValue());
-                    }
-                    return new AvroEventLogBean(eventLogBean.getGuid(),eventLogBean.getSessionId(),eventLogBean.getEventId(),eventLogBean.getTimeStamp(),eventInfo);
-                }).sinkTo(parquetSink);
-
-        //53:33
+        streamSource.sinkTo(parquetSink);
         env.execute("");
     }
 }
